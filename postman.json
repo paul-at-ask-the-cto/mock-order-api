@@ -1,0 +1,397 @@
+{
+  "info": {
+    "name": "Order Management System - Mock API",
+    "description": "Mock API collection for Order Management System",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  }, 
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{auth_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "auth_token",
+      "value": "test-token-12345",
+      "type": "string"
+    },
+    {
+      "key": "test_customer_id",
+      "value": "cust-12345",
+      "type": "string"
+    },
+    {
+      "key": "created_order_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        },
+        "description": "Check if the API service is healthy. No authentication required."
+      },
+      "response": []
+    },
+    {
+      "name": "Create Order",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "    const responseJson = pm.response.json();",
+              "    pm.collectionVariables.set('created_order_id', responseJson.orderId);",
+              "    pm.test('Order created successfully', function () {",
+              "        pm.expect(responseJson.orderId).to.exist;",
+              "        pm.expect(responseJson.status).to.eql('pending');",
+              "    });",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// Generate UUID for idempotency key",
+              "function generateUUID() {",
+              "    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {",
+              "        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);",
+              "        return v.toString(16);",
+              "    });",
+              "}",
+              "",
+              "pm.collectionVariables.set('idempotency_key', generateUUID());"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{idempotency_key}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"{{test_customer_id}}\",\n  \"items\": [\n    {\n      \"productId\": \"prod-001\",\n      \"quantity\": 2,\n      \"unitPrice\": 29.99\n    },\n    {\n      \"productId\": \"prod-002\",\n      \"quantity\": 1,\n      \"unitPrice\": 15.50\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/orders",
+          "host": ["{{base_url}}"],
+          "path": ["orders"]
+        },
+        "description": "Create a new order. Requires idempotency key for safe retries."
+      },
+      "response": []
+    },
+    {
+      "name": "Create Order (Idempotent Test)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{idempotency_key}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"{{test_customer_id}}\",\n  \"items\": [\n    {\n      \"productId\": \"prod-001\",\n      \"quantity\": 2,\n      \"unitPrice\": 29.99\n    },\n    {\n      \"productId\": \"prod-002\",\n      \"quantity\": 1,\n      \"unitPrice\": 15.50\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/orders",
+          "host": ["{{base_url}}"],
+          "path": ["orders"]
+        },
+        "description": "Duplicate request using same idempotency key. Should return existing order with 200 status."
+      },
+      "response": []
+    },
+    {
+      "name": "Get Order by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/orders/{{created_order_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["orders", "{{created_order_id}}"]
+        },
+        "description": "Retrieve a specific order by its ID."
+      },
+      "response": []
+    },
+    {
+      "name": "Search Orders - Basic",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/orders?customerId={{test_customer_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["orders"],
+          "query": [
+            {
+              "key": "customerId",
+              "value": "{{test_customer_id}}"
+            }
+          ]
+        },
+        "description": "Search orders by customer ID."
+      },
+      "response": []
+    },
+    {
+      "name": "Search Orders - With Date Range",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/orders?customerId={{test_customer_id}}&startDate=2025-01-01&endDate=2025-12-31&limit=10&offset=0",
+          "host": ["{{base_url}}"],
+          "path": ["orders"],
+          "query": [
+            {
+              "key": "customerId",
+              "value": "{{test_customer_id}}"
+            },
+            {
+              "key": "startDate",
+              "value": "2025-01-01"
+            },
+            {
+              "key": "endDate",
+              "value": "2025-12-31"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            },
+            {
+              "key": "offset",
+              "value": "0"
+            }
+          ]
+        },
+        "description": "Search orders with date range and pagination parameters."
+      },
+      "response": []
+    },
+    {
+      "name": "Update Order Status - Confirm",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"confirmed\",\n  \"reason\": \"Payment processed successfully\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/orders/{{created_order_id}}/status",
+          "host": ["{{base_url}}"],
+          "path": ["orders", "{{created_order_id}}", "status"]
+        },
+        "description": "Update order status from pending to confirmed."
+      },
+      "response": []
+    },
+    {
+      "name": "Update Order Status - Processing",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"processing\",\n  \"reason\": \"Order being prepared for shipment\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/orders/{{created_order_id}}/status",
+          "host": ["{{base_url}}"],
+          "path": ["orders", "{{created_order_id}}", "status"]
+        },
+        "description": "Update order status from confirmed to processing."
+      },
+      "response": []
+    },
+    {
+      "name": "Update Order Status - Shipped",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"shipped\",\n  \"reason\": \"Package dispatched via FedEx, tracking: 1234567890\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/orders/{{created_order_id}}/status",
+          "host": ["{{base_url}}"],
+          "path": ["orders", "{{created_order_id}}", "status"]
+        },
+        "description": "Update order status from processing to shipped."
+      },
+      "response": []
+    },
+    {
+      "name": "Update Order Status - Delivered",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"delivered\",\n  \"reason\": \"Package delivered to customer\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/orders/{{created_order_id}}/status",
+          "host": ["{{base_url}}"],
+          "path": ["orders", "{{created_order_id}}", "status"]
+        },
+        "description": "Update order status from shipped to delivered."
+      },
+      "response": []
+    },
+    {
+      "name": "Cancel Order",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"cancelled\",\n  \"reason\": \"Customer requested cancellation\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/orders/{{created_order_id}}/status",
+          "host": ["{{base_url}}"],
+          "path": ["orders", "{{created_order_id}}", "status"]
+        },
+        "description": "Cancel an order. Only possible if the order is pending, confirmed, or in processing states."
+      },
+      "response": []
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ]
+}

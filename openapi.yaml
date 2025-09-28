@@ -1,0 +1,411 @@
+iopenapi: 3.0.3
+info: 
+  title: Order Management System API
+  description: Mock API for Order Management System to unblock development
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: api-support@retailer.com
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /orders:
+    post:
+      summary: Create a new order
+      description: |
+        Creates a new order. This operation is idempotent - multiple requests with the same 
+        idempotency key will return the same result without creating duplicate orders.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID to ensure idempotent order creation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+            example:
+              customerId: "cust-12345"
+              items:
+                - productId: "prod-001"
+                  quantity: 2
+                  unitPrice: 29.99
+      responses:
+        '201':
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '200':
+          description: Order already exists (idempotent response)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    get:
+      summary: Search orders
+      description: Search orders by customer ID and optional date range
+      parameters:
+        - name: customerId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Customer ID to filter orders
+          example: "cust-12345"
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Start date for order search (inclusive)
+          example: "2024-01-01"
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: End date for order search (inclusive)
+          example: "2024-12-31"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Maximum number of orders to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Number of orders to skip for pagination
+      responses:
+        '200':
+          description: Orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderSearchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /orders/{orderId}:
+    get:
+      summary: Get order by ID
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique order identifier
+          example: "ord-67890"
+      responses:
+        '200':
+          description: Order retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /orders/{orderId}/status:
+    patch:
+      summary: Update order status
+      description: Updates the status of an existing order
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique order identifier
+          example: "ord-67890"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrderStatusRequest'
+            example:
+              status: "shipped"
+              reason: "Package dispatched via FedEx"
+      responses:
+        '200':
+          description: Order status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /health:
+    get:
+      summary: Health check endpoint
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  timestamp:
+                    type: string
+                    format: date-time
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Use Bearer token authentication. For this mock service, use any non-empty token.
+        Example: Authorization: Bearer mock-token-12345
+
+  schemas:
+    Order:
+      type: object
+      required:
+        - orderId
+        - customerId
+        - placementDate
+        - status
+        - items
+        - totalAmount
+      properties:
+        orderId:
+          type: string
+          description: Unique order identifier
+          example: "ord-67890"
+        customerId:
+          type: string
+          description: Customer identifier
+          example: "cust-12345"
+        placementDate:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when order was placed
+          example: "2024-03-15T14:30:00Z"
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+          minItems: 1
+        totalAmount:
+          type: number
+          format: double
+          minimum: 0
+          description: Total order amount in dollars
+          example: 59.98
+        lastUpdated:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when order was last updated
+          example: "2024-03-15T14:30:00Z"
+
+    CreateOrderRequest:
+      type: object
+      required:
+        - customerId
+        - items
+      properties:
+        customerId:
+          type: string
+          description: Customer identifier
+          example: "cust-12345"
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+          minItems: 1
+          description: List of items in the order
+
+    UpdateOrderStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        reason:
+          type: string
+          description: Optional reason for status change
+          example: "Payment processed successfully"
+
+    OrderItem:
+      type: object
+      required:
+        - productId
+        - quantity
+        - unitPrice
+      properties:
+        productId:
+          type: string
+          description: Product identifier
+          example: "prod-001"
+        quantity:
+          type: integer
+          minimum: 1
+          description: Quantity ordered
+          example: 2
+        unitPrice:
+          type: number
+          format: double
+          minimum: 0
+          description: Price per unit in dollars
+          example: 29.99
+
+    OrderStatus:
+      type: string
+      enum:
+        - pending
+        - confirmed
+        - processing
+        - shipped
+        - delivered
+        - cancelled
+      description: Current status of the order
+      example: "pending"
+
+    OrderSearchResponse:
+      type: object
+      required:
+        - orders
+        - totalCount
+        - limit
+        - offset
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+        totalCount:
+          type: integer
+          description: Total number of orders matching the search criteria
+          example: 150
+        limit:
+          type: integer
+          description: Maximum number of orders returned
+          example: 20
+        offset:
+          type: integer
+          description: Number of orders skipped
+          example: 0
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Customer ID is required"
+        details:
+          type: object
+          description: Additional error details
+          additionalProperties: true
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters or body
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "VALIDATION_ERROR"
+            message: "Customer ID is required"
+
+    Unauthorized:
+      description: Authentication required or invalid token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "UNAUTHORIZED"
+            message: "Invalid or missing authentication token"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "NOT_FOUND"
+            message: "Order not found"
+
+    Conflict:
+      description: Resource conflict (e.g., invalid status transition)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "INVALID_STATUS_TRANSITION"
+            message: "Cannot transition from delivered to processing"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "INTERNAL_ERROR"
+            message: "An unexpected error occurred"
