@@ -23,7 +23,7 @@ A lightweight, production-ready mock API for an Order Management System.
 ### Installation
 
 ```bash
-# Clone or download the project files
+# Clone or download the project files then install the node modules
 npm install
 
 # Start the server
